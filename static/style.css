@@ -1,0 +1,109 @@
+/* General Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Background with subtle gradient */
+body {
+  font-family: "Inter", sans-serif;
+  background: linear-gradient(135deg, #0a0f1f, #121826);
+  color: white;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Center container */
+.app-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 20px;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 30px;
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Headings */
+.title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  font-size: 0.95rem;
+  opacity: 0.85;
+  margin-bottom: 25px;
+}
+
+/* Buttons */
+.button-group {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.25s ease-in-out;
+  font-weight: 600;
+}
+
+.btn.primary {
+  background: rgba(0, 122, 255, 0.85);
+  color: white;
+}
+
+.btn.primary:hover {
+  background: rgba(0, 122, 255, 1);
+}
+
+.btn.danger {
+  background: rgba(255, 69, 58, 0.85);
+  color: white;
+}
+
+.btn.danger:hover {
+  background: rgba(255, 69, 58, 1);
+}
+
+/* Audio Player Styling */
+audio {
+  width: 100%;
+  margin-top: 15px;
+  border-radius: 12px;
+}
+
+/* Status Box for live updates */
+.status-box {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 15px;
+  margin-top: 20px;
+  min-height: 40px;
+  font-size: 0.9rem;
+  text-align: center;
+  opacity: 0.85;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}

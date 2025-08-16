@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Voice Chat Agent</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <div class="glass-card">
+        <h1 class="title">AI Voice Chat Agent</h1>
+        <p class="subtitle">
+          Speak naturally — your voice will be transcribed, processed by the LLM
+          with chat history, and you'll hear Murf's reply.
+        </p>
+
+        <div class="button-group">
+          <button id="startBtn" class="btn primary">🎤 Start Recording</button>
+          <button id="stopBtn" class="btn danger">End Conversation</button>
+        </div>
+
+        <audio id="audioPlayer" controls></audio>
+
+        <div id="statusBox" class="status-box"></div>
+      </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+    <script>
+      // Generate a random session_id
+      const sessionId = Math.random().toString(36).substring(2, 10);
+      if (!window.location.search.includes("session_id")) {
+        const newUrl = window.location.pathname + "?session_id=" + sessionId;
+        window.history.replaceState({}, "", newUrl);
+      }
+    </script>
+  </body>
+</html>
