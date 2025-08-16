@@ -56,7 +56,7 @@ async def agent_chat(session_id: str, file: UploadFile = File(...)):
         return ChatResponse(text=llm_response, audio_base64=audio_b64)
 
     except Exception as e:
-        logging.ecxeption("Error in chat processing")
+        logging.exception("Error in chat processing")
         return ChatResponse(text="Sorry, something went wrong.", audio_base64="")
     
     finally:

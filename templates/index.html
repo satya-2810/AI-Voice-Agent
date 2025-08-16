@@ -20,20 +20,12 @@
           <button id="stopBtn" class="btn danger">End Conversation</button>
         </div>
 
-        <audio id="audioPlayer" controls></audio>
+        <audio id="audioPlayback" controls></audio>
 
         <div id="statusBox" class="status-box"></div>
       </div>
     </div>
 
     <script src="/static/script.js"></script>
-    <script>
-      // Generate a random session_id
-      const sessionId = Math.random().toString(36).substring(2, 10);
-      if (!window.location.search.includes("session_id")) {
-        const newUrl = window.location.pathname + "?session_id=" + sessionId;
-        window.history.replaceState({}, "", newUrl);
-      }
-    </script>
   </body>
 </html>

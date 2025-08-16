@@ -1,7 +1,7 @@
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const audioPlayback = document.getElementById("audioPlayback");
-const statusDiv = document.getElementById("status");
+const statusDiv = document.getElementById("statusBox");
 
 let mediaRecorder;
 let audioChunks = [];
