@@ -8,14 +8,16 @@ __pycache__/
 venv/
 env/
 .venv/
+venvScriptsactivate
 
-# OS files
-.DS_Store
-
-# Secrets
 .env
 
 # Temporary files
 *.wav
 *.mp3
 *.tmp
+
+# OS
+.DS_Store
+
+uploads/
