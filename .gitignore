@@ -1,3 +1,23 @@
-.env
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+.venv/
+venvScriptsactivate
+
+.env
+
+# Temporary files
+*.wav
+*.mp3
+*.tmp
+
+# OS
+.DS_Store
+
+uploads/
