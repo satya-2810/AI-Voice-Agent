@@ -1,4 +1,4 @@
-# MURF AI-Powered Voice Agent
+# AI Voice Agent
 
 An interactive AI-powered voice assistant that converts speech to text (STT), processes it with a Large Language Model (LLM), and responds with natural text-to-speech (TTS).  
 The project integrates Murf AI for voice synthesis, AssemblyAI for transcription, and Google's Gemini API for intelligent responses.
