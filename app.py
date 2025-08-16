@@ -63,7 +63,6 @@ async def agent_chat(session_id: str, file: UploadFile = File(...)):
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
-
 @app.post("/llm/query")
 async def llm_query(payload: TextQuery):
     response_text = query_gemini(payload.text)

@@ -54,7 +54,7 @@ startBtn.addEventListener("click", async () => {
     };
 
     mediaRecorder.start();
-    startBtn.classList.add("recording");
+    startBtn.textContent = "⏹ Stop Recording";
     statusDiv.textContent = "Recording...";
   } catch (err) {
     console.error(err);
@@ -66,6 +66,6 @@ startBtn.addEventListener("click", async () => {
 stopBtn.addEventListener("click", () => {
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
-    startBtn.classList.remove("recording");
+    startBtn.textContent = "🎤 Start Recording"; // revert text
   }
 });
