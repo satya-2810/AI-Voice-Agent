@@ -1,111 +1,183 @@
-# AI Voice Agent
+# 🎤 AI Voice Chat Agent
 
-An interactive AI-powered voice assistant that converts speech to text (STT), processes it with a Large Language Model (LLM), and responds with natural text-to-speech (TTS).  
-The project integrates Murf AI for voice synthesis, AssemblyAI for transcription, and Google's Gemini API for intelligent responses.
+A sophisticated conversational AI agent that supports voice input and output, built with FastAPI and modern Python practices. The agent processes speech through a complete pipeline: Speech-to-Text → Language Model → Text-to-Speech.
 
-## 🚀 Features
+![Architecture of the pipeline](assets/architecture_diagram.png "Architecture of the pipeline") ![Voice agent ui](assets/ui_interface.png "Voice agent UI Interface")
 
-- 🎙 **Speech to Text (STT)**: Converts voice input into accurate text using AssemblyAI.
-- 🧠 **Conversational Memory**: Maintains chat history for contextual responses.
-- 🤖 **LLM Integration**: Uses Gemini API for intelligent replies.
-- 🔊 **Text to Speech (TTS)**: Converts AI responses into natural-sounding audio using Murf AI.
-- 💾 **Session Management**: Session IDs to store conversation context.
-- 🎨 **Modern UI**: Glassmorphism-inspired front-end design.
-- 📂 **Multi-format Input Support**: Can handle audio inputs (WAV) and return audio or fallback responses.
+## ✨ Features
 
-## 🛠 Tech Stack
+- 🎙️ **Voice Input**: Record audio directly in the browser
+- 🗣️ **Voice Output**: High-quality text-to-speech responses
+- 💬 **Chat Memory**: Maintains conversation context across interactions
+- 🏗️ **Modern Architecture**: Clean, maintainable code with service separation
+- 📊 **Comprehensive Logging**: Detailed logs for debugging and monitoring
 
-**Frontend:**
+## 🛠️ Technology Stack
 
-- HTML5, CSS3 (Glassmorphism styling)
-- JavaScript (MediaRecorder API)
+- **Backend**: FastAPI with Pydantic models
+- **Speech-to-Text**: AssemblyAI
+- **Language Model**: Google Gemini Pro
+- **Text-to-Speech**: Murf AI
+- **Frontend**: JavaScript
 
-**Backend:**
+## 📋 Prerequisites
 
-- Python (FastAPI)
-- Murf AI API (TTS)
-- AssemblyAI API (STT)
-- Google Gemini API (LLM)
+- Python 3.11+
+- API Keys for:
+  - Google Gemini API
+  - Murf AI API
+  - AssemblyAI API
 
-**Other Tools:**
+## 🚀 Quick Start
 
-- FormData for file transfer
-- Fetch API for backend communication
+### 1. Clone the Repository
 
-## 📂 Project Structure
+```bash
+git clone https://github.com/yourusername/ai-voice-chat-agent.git
+cd ai-voice-chat-agent
+```
+
+### 2. Set Up Environment
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/Scripts/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Configure Environment Variables
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your API keys
+GEMINI_API_KEY=your_gemini_api_key_here
+MURF_API_KEY=your_murf_api_key_here
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here
+```
+
+### 4. Run the Application
+
+```bash
+
+# With uvicorn
+uvicorn app:app --reload
+```
+
+## 📁 Project Structure
 
 ```plaintext
-project-root/
-|── assets/
-│── static/
-│   ├── script.js          # Frontend JS logic (recording, sending audio, handling responses)
-│   ├── style.css          # Frontend styles
-│── templates/
-│   ├── index.html         # Main UI
-│── uploads/               # Uploaded audio files
-│── app.py                 # FastAPI backend
-│── requirements.txt       # Python dependencies
-│── .env                   # Environment variables
-│── venv/                  # Virtual environment
+voice-agent/
+├── app.py                 # Main FastAPI application
+├── config.py              # Configuration management
+├── run.py                 # Development server runner
+├── requirements.txt       # Python dependencies
+├── .env.example           # Environment variables template
+├── models/
+│   ├── __init__.py
+│   └── schemas.py         # Pydantic models
+├── services/
+│   ├── __init__.py
+│   ├── stt_service.py     # Speech-to-Text service
+│   ├── llm_service.py     # Language Model service
+│   ├── tts_service.py     # Text-to-Speech service
+│   └── chat_service.py    # Chat history management
+├── utils/
+│   ├── __init__.py
+│   └── logger.py          # Logging configuration
+├── static/
+│   ├── script.js          # Frontend JavaScript
+│   └── style.css          # Stylesheets
+├── templates/
+│   └── index.html         # HTML template
+└── temp/                  # Temporary audio files
 ```
 
-## 🏗 Architecture
+## 🏗️ Architecture Overview
+
+The application follows a clean architecture pattern with separation of concerns:
+
+### Services Layer
+
+- **STTService**: Handles AssemblyAI speech-to-text operations
+- **LLMService**: Manages Gemini API interactions
+- **TTSService**: Processes Murf AI text-to-speech
+- **ChatService**: Maintains conversation history
+
+## 🔄 Data Flow
 
 ```mermaid
-graph TD;
-    User[🎤 User Speaks] -->|Audio Input| BrowserJS[Frontend JS]
-    BrowserJS -->|Send Audio| FastAPI[FastAPI Backend]
-    FastAPI -->|STT| AssemblyAI[AssemblyAI API]
-    AssemblyAI -->|Transcript| LLM[Gemini API]
-    LLM -->|Response Text| MurfAI[Murf AI API]
-    MurfAI -->|Audio Response| BrowserJS
-    BrowserJS -->|Play Audio| User
+graph TD
+    A[🎙️ Voice Input] --> B[📤 Upload Audio]
+    B --> C[🎯 Speech-to-Text]
+    C --> D[💾 Save to History]
+    D --> E[🤖 Generate Response]
+    E --> F[💾 Save Response]
+    F --> G[🔊 Text-to-Speech]
+    G --> H[📱 Return Audio + Text]
 ```
 
-## ⚙ Setup Instructions
+## 🎯 Usage Examples
 
-1. **Clone the repository**
+### Voice Interaction
 
-   ```bash
-   git clone <repo-url>
-   cd <repo-folder>
-   ```
+1. Click "🎤 Start Recording"
+2. Speak your message
+3. Click "⏹ Stop Recording"
+4. Receive AI response with audio playback
 
-2. **Create a virtual environment & activate it**
+### Text Query (API)
 
-   ```bash
-   python -m venv venv
-   source venv\Scripts\activate
-   ```
+```bash
+curl -X POST "http://localhost:8000/llm/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello, how are you today?"}'
+```
 
-3. **Install dependencies**
+### Get Session History
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+curl -X GET "http://localhost:8000/sessions/123456/history"
+```
 
-4. **Create a `.env` file**
+### Example Responses
 
-   ```env
-   MURF_API_KEY=your_murf_api_key
-   ASSEMBLYAI_API_KEY=your_assemblyai_api_key
-   GEMINI_API_KEY=your_gemini_api_key
-   ```
+#### Successful Chat Response
 
-5. **Run the server**
+```json
+{
+  "text": "Hello! How can I help you today?",
+  "audio_base64": "UklGRiQAAABXQVZFZm10...",
+  "session_id": "1234567890"
+}
+```
 
-   ```bash
-   uvicorn app:app --reload
-   ```
+#### Error Response
 
-6. **Open the UI**
-   - Visit `http://127.0.0.1:8000` in your browser.
+```json
+{
+  "error": "Transcription failed",
+  "detail": "No speech detected in audio",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
 
-## 📸 Screenshots
+## 🙏 Acknowledgments
 
-![Architecture of the project](assets/architecture_diagram.png "Architecture")
-![UI interface](assets/ui_interface.png "Interface")
+- **AssemblyAI** for speech recognition services
+- **Google Gemini** for language model capabilities
+- **Murf AI** for text-to-speech synthesis
+- **FastAPI** for the excellent web framework
 
----
+## 🌟 Support
 
-💡 **Pro Tip**: Keep your API keys safe and never commit `.env` to version control.
+If you find this project helpful, please consider:
+
+- ⭐ Giving it a star on GitHub
+- 🍴 Forking and contributing
+- 📢 Sharing with the community
+- 💬 Opening issues for bugs or features

@@ -4,25 +4,68 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Voice Chat Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <div class="app-container">
-      <div class="glass-card">
-        <h1 class="title">AI Voice Chat Agent</h1>
-        <p class="subtitle">
-          Speak naturally — your voice will be transcribed, processed by the LLM
-          with chat history, and you'll hear Murf's reply.
-        </p>
+    <!-- Subtle Background Elements -->
+    <div class="bg-animation">
+      <div class="floating-orb orb-1"></div>
+      <div class="floating-orb orb-2"></div>
+      <div class="floating-orb orb-3"></div>
+    </div>
 
-        <div class="button-group">
-          <button id="startBtn" class="btn primary">🎤 Start Recording</button>
-          <button id="stopBtn" class="btn danger">End Conversation</button>
+    <div class="app-container">
+      <!-- Main Glass Card -->
+      <div class="glass-card">
+        <!-- Header Section -->
+        <div class="header-section">
+          <h1 class="title">AI Voice Chat Agent</h1>
+          <p class="subtitle">
+            Speak naturally — your voice will be transcribed, processed by the
+            LLM with chat history, and you'll hear Murf's reply.
+          </p>
         </div>
 
-        <audio id="audioPlayback" controls></audio>
+        <!-- Voice Visualizer (Hidden by default, shown when recording) -->
+        <div class="voice-visualizer" id="voiceVisualizer">
+          <div class="wave-container">
+            <div class="wave wave-1"></div>
+            <div class="wave wave-2"></div>
+            <div class="wave wave-3"></div>
+            <div class="wave wave-4"></div>
+            <div class="wave wave-5"></div>
+          </div>
+        </div>
 
-        <div id="statusBox" class="status-box"></div>
+        <!-- Interactive Buttons -->
+        <div class="button-group">
+          <button id="startBtn" class="btn primary">
+            <span class="btn-icon">🎤</span>
+            <span class="btn-text">Start Recording</span>
+          </button>
+          <button id="stopBtn" class="btn secondary">
+            <span class="btn-text">End Conversation</span>
+          </button>
+        </div>
+
+        <!-- Audio Player -->
+        <div class="audio-container">
+          <audio id="audioPlayback" controls></audio>
+        </div>
+
+        <!-- Status Display -->
+        <div class="status-container">
+          <div id="statusBox" class="status-box">
+            <div class="status-indicator"></div>
+            <span class="status-text">Ready to listen...</span>
+          </div>
+        </div>
       </div>
     </div>
 
