@@ -1,7 +1,8 @@
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import json
 import logging
 import tempfile
 import base64
@@ -9,6 +10,8 @@ import requests
 import os
 import time
 from typing import List, Optional
+import time
+import wave
 
 # Import configuration and services
 from config import settings
@@ -389,3 +392,30 @@ async def debug_minimal_tts():
             "error": str(e),
             "type": type(e).__name__
         }
+
+@app.websocket("/ws/audio")
+async def websocket_audio(websocket: WebSocket):
+    # Accept the connection
+    await websocket.accept()
+    print("Audio WebSocket connection accepted")
+    
+    OUTPUT_FILE = "received audio.wav"
+    
+    wf = wave.open(OUTPUT_FILE, 'wb')
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(44100)
+    
+    try:
+        while True:
+            # Receive a message from the client
+            data = await websocket.receive_bytes()
+            print(f"Received: {len(data)} bytes")
+            
+            wf.writeframes(data)
+
+    except Exception as e:
+        print(f"WebSocket disconnected: {e}")
+    finally:
+        wf.close()
+        print(f"Audio saved to {OUTPUT_FILE}")
