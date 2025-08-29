@@ -18,7 +18,7 @@ from assemblyai.streaming.v3 import (
     TurnEvent,
 )
 from typing import Type
-
+import uvicorn
 from config import settings
 from services.chat_service import ChatService
 from services.stt_service import STTService
@@ -39,10 +39,14 @@ logger = logging.getLogger(__name__)
 aai.settings.api_key = settings.assemblyai_api_key
 
 app = FastAPI(
-    title="AI Voice Chat Agent",
+    title="Lady Victoria - AI Voice Chat Agent",
     version="1.0.0",
     description="AI-powered voice chat application with STT, LLM, and TTS capabilities"
 )
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app,host = "0.0.0.0", port = port)
 main_loop = asyncio.get_running_loop()
 
 # Mount static files and templates
