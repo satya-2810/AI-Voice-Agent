@@ -22,7 +22,7 @@ SpeechRecognition==3.10.0
 pydub==0.25.1
 
 # AI/ML APIs
-assemblyai==0.28.4
+assemblyai==0.28.1
 
 # WebSocket support
 websockets==12.0
