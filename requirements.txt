@@ -23,6 +23,7 @@ pydub==0.25.1
 
 # AI/ML APIs
 assemblyai==0.28.1
+assemblyai-realtime==0.4.0
 
 # WebSocket support
 websockets==12.0
