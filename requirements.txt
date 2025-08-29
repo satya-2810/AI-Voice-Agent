@@ -18,7 +18,7 @@ requests==2.31.0
 aiofiles==23.2.1
 
 # Audio processing (legacy - kept for compatibility)
-python-speech-recognition==3.10.0
+SpeechRecognition==3.10.0
 pydub==0.25.1
 
 # AI/ML APIs
