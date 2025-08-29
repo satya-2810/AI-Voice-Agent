@@ -2,6 +2,7 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const statusDiv = document.getElementById("statusBox");
 const voiceVisualizer = document.getElementById("voiceVisualizer");
+const transcriptionDisplay = document.getElementById("transcriptionDisplay");
 
 let mediaRecorder;
 let isRecording = false;
@@ -9,11 +10,154 @@ let ws = null;
 let audioContext = null;
 let processor = null;
 
-// Enhanced UI update functions
+let ttsChunks = [];
+
+// --- Enhanced Audio Buffering System for Seamless Playback ---
+let playbackContext;
+let playheadTime = 0;
+let audioQueue = [];
+let audioBuffer = [];
+let isPlayingAudio = false;
+let nextStartTime = 0;
+let bufferThreshold = 3; // Number of chunks to buffer before starting
+let isBuffering = true;
+let currentlyPlaying = [];
+
+function base64ToPCMFloat32(base64) {
+  const binary = atob(base64);
+  let offset = 0;
+
+  // Detect and skip WAV header if present
+  if (binary.length > 44 && binary.slice(0, 4) === "RIFF") {
+    offset = 44;
+  }
+
+  const length = binary.length - offset;
+  const byteArray = new Uint8Array(length);
+
+  for (let i = 0; i < length; i++) {
+    byteArray[i] = binary.charCodeAt(i + offset);
+  }
+
+  const view = new DataView(byteArray.buffer);
+  const sampleCount = byteArray.length / 2;
+  const float32Array = new Float32Array(sampleCount);
+
+  for (let i = 0; i < sampleCount; i++) {
+    const int16 = view.getInt16(i * 2, true);
+    float32Array[i] = int16 / 32768;
+  }
+
+  return float32Array;
+}
+
+function initializeAudioContext() {
+  if (!playbackContext) {
+    playbackContext = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: 44100,
+    });
+
+    if (playbackContext.state === "suspended") {
+      playbackContext.resume();
+    }
+
+    nextStartTime = playbackContext.currentTime;
+  }
+}
+
+function addToAudioBuffer(base64Audio) {
+  const float32Array = base64ToPCMFloat32(base64Audio);
+  if (!float32Array || float32Array.length === 0) return;
+
+  // Add to buffer
+  audioBuffer.push(float32Array);
+
+  // Start playing if we have enough buffered or if already playing
+  if (audioBuffer.length >= bufferThreshold && isBuffering) {
+    isBuffering = false;
+    startBufferedPlayback();
+  } else if (!isBuffering && !isPlayingAudio) {
+    // Continue playing if not currently playing
+    startBufferedPlayback();
+  }
+}
+
+function startBufferedPlayback() {
+  if (!playbackContext || audioBuffer.length === 0) return;
+
+  isPlayingAudio = true;
+
+  // Play all buffered chunks seamlessly
+  while (audioBuffer.length > 0) {
+    const float32Array = audioBuffer.shift();
+    playAudioChunkBuffered(float32Array);
+  }
+
+  // Schedule check for more audio
+  setTimeout(checkForMoreAudio, 50);
+}
+
+function playAudioChunkBuffered(float32Array) {
+  if (!playbackContext) return;
+
+  const buffer = playbackContext.createBuffer(1, float32Array.length, 44100);
+  buffer.copyToChannel(float32Array, 0);
+
+  const source = playbackContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(playbackContext.destination);
+
+  const now = playbackContext.currentTime;
+
+  // Improved scheduling with minimal gaps
+  if (nextStartTime <= now) {
+    nextStartTime = now + 0.01; // Very small buffer for responsiveness
+  }
+
+  source.start(nextStartTime);
+  nextStartTime += buffer.duration;
+
+  // Track currently playing sources
+  currentlyPlaying.push({
+    source: source,
+    endTime: nextStartTime,
+  });
+
+  source.onended = () => {
+    source.disconnect();
+    // Remove from tracking
+    currentlyPlaying = currentlyPlaying.filter(
+      (item) => item.source !== source
+    );
+  };
+}
+
+function checkForMoreAudio() {
+  if (audioBuffer.length > 0) {
+    startBufferedPlayback();
+  } else {
+    // Check if any audio is still playing
+    const now = playbackContext ? playbackContext.currentTime : 0;
+    const stillPlaying = currentlyPlaying.some((item) => item.endTime > now);
+
+    if (!stillPlaying) {
+      isPlayingAudio = false;
+    } else {
+      // Keep checking
+      setTimeout(checkForMoreAudio, 50);
+    }
+  }
+}
+
+function playAudioChunk(base64Audio) {
+  initializeAudioContext();
+  addToAudioBuffer(base64Audio);
+}
+
+// --- Helpers ---
 function updateButtonText(button, icon, text) {
   const iconSpan = button.querySelector(".btn-icon");
   const textSpan = button.querySelector(".btn-text");
-
   if (iconSpan && icon) iconSpan.textContent = icon;
   if (textSpan && text) textSpan.textContent = text;
 }
@@ -63,6 +207,17 @@ function resetRecordingState() {
   isRecording = false;
 }
 
+// --- Display only FINAL transcriptions ---
+function displayTranscription(transcript) {
+  if (transcriptionDisplay) {
+    const finalTranscript = document.createElement("div");
+    finalTranscript.className = "final-transcript";
+    finalTranscript.textContent = transcript;
+    transcriptionDisplay.appendChild(finalTranscript);
+    transcriptionDisplay.scrollTop = transcriptionDisplay.scrollHeight;
+  }
+}
+
 // Convert float32 audio to int16 PCM
 function float32ToInt16(buffer) {
   let l = buffer.length;
@@ -73,33 +228,42 @@ function float32ToInt16(buffer) {
   return buf;
 }
 
-// Start Recording
-startBtn.addEventListener("click", async () => {
-  if (isRecording) {
-    // Stop recording
-    if (processor) {
-      processor.disconnect();
-      processor = null;
+// Reset audio playback state for new conversation turn
+function resetAudioPlayback() {
+  audioQueue = [];
+  audioBuffer = [];
+  isPlayingAudio = false;
+  isBuffering = true;
+  currentlyPlaying.forEach((item) => {
+    if (item.source) {
+      try {
+        item.source.stop();
+        item.source.disconnect();
+      } catch (e) {
+        // Ignore errors from already stopped sources
+      }
     }
-    if (audioContext) {
-      audioContext.close();
-      audioContext = null;
-    }
-    if (ws) ws.close();
-    resetRecordingState();
-    updateStatus("Stopping and saving audio...", "processing");
-    return;
-  }
+  });
+  currentlyPlaying = [];
 
+  if (playbackContext) {
+    nextStartTime = playbackContext.currentTime;
+  }
+}
+
+// Start Recording
+async function beginRecording() {
   try {
-    // Open WebSocket to backend
     ws = new WebSocket(`ws://${window.location.host}/ws`);
 
     ws.onopen = async () => {
       console.log("✅ WebSocket connected");
       updateStatus("Recording... Speak now", "recording");
 
-      // Get microphone stream with specific constraints
+      // reset TTS chunk buffer per session/turn
+      ttsChunks = [];
+      resetAudioPlayback(); // Reset audio state for new turn
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
@@ -109,27 +273,19 @@ startBtn.addEventListener("click", async () => {
         },
       });
 
-      // Create AudioContext for processing raw audio
       audioContext = new AudioContext({ sampleRate: 16000 });
       const source = audioContext.createMediaStreamSource(stream);
-
-      // Create ScriptProcessor for real-time audio processing
       processor = audioContext.createScriptProcessor(4096, 1, 1);
 
       processor.onaudioprocess = (event) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           const inputBuffer = event.inputBuffer;
           const inputData = inputBuffer.getChannelData(0);
-
-          // Convert float32 to int16 PCM
           const pcmData = float32ToInt16(inputData);
-
-          // Send raw PCM data to WebSocket
           ws.send(pcmData.buffer);
         }
       };
 
-      // Connect audio processing chain
       source.connect(processor);
       processor.connect(audioContext.destination);
 
@@ -149,13 +305,74 @@ startBtn.addEventListener("click", async () => {
     };
 
     ws.onmessage = (event) => {
-      console.log("📩 Received from server:", event.data);
+      try {
+        const message = JSON.parse(event.data);
+
+        if (message.type === "final_transcription") {
+          displayTranscription(message.transcript);
+          updateStatus("Turn completed ✓", "success");
+        } else if (message.type === "llm_chunk") {
+          // Optional: log token flow
+          // console.log("LLM chunk:", message.content);
+        } else if (message.type === "tts_audio_chunk") {
+          // Ensure audio context is ready before playing
+          if (playbackContext && playbackContext.state === "suspended") {
+            playbackContext.resume().then(() => {
+              playAudioChunk(message.audio_base64);
+            });
+          } else {
+            playAudioChunk(message.audio_base64); // 🔊 play with buffering
+          }
+          console.log("🎧 Buffering TTS audio chunk");
+        } else if (message.type === "tts_done") {
+          console.log(
+            "✅ Client ACK: TTS stream complete. Total chunks =",
+            ttsChunks.length
+          );
+          // Flush remaining buffer
+          isBuffering = false;
+          if (audioBuffer.length > 0 && !isPlayingAudio) {
+            startBufferedPlayback();
+          }
+        } else if (message.type === "turn_end") {
+          updateStatus("Turn ended - ready for next turn", "default");
+
+          // 🔁 Restart recording automatically for next turn
+          if (!isRecording) {
+            setTimeout(() => {
+              beginRecording();
+            }, 500);
+          }
+        }
+      } catch (e) {
+        console.log("Plain message:", event.data);
+      }
     };
   } catch (err) {
     console.error("Microphone access error:", err);
     updateStatus("Microphone access denied.", "error");
     isRecording = false;
   }
+}
+
+startBtn.addEventListener("click", async () => {
+  if (isRecording) {
+    if (processor) {
+      processor.disconnect();
+      processor = null;
+    }
+    if (audioContext) {
+      audioContext.close();
+      audioContext = null;
+    }
+    if (ws) ws.close();
+
+    resetRecordingState();
+    updateStatus("Stopping and saving audio...", "processing");
+    return;
+  }
+
+  beginRecording();
 });
 
 // End Conversation Button
@@ -168,21 +385,55 @@ stopBtn.addEventListener("click", () => {
     audioContext.close();
     audioContext = null;
   }
+  if (playbackContext) {
+    playbackContext.close();
+    playbackContext = null;
+  }
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.close();
   }
+
   resetRecordingState();
+  resetAudioPlayback();
   updateStatus("Conversation ended. Ready for new session.");
+  if (transcriptionDisplay) transcriptionDisplay.innerHTML = "";
 });
+
+// --- API Key Config Management ---
+function saveApiKeys() {
+  const murfKey = document.getElementById("murfKey").value.trim();
+  const assemblyKey = document.getElementById("assemblyKey").value.trim();
+  const geminiKey = document.getElementById("geminiKey").value.trim();
+
+  const keys = { murfKey, assemblyKey, geminiKey };
+  localStorage.setItem("apiKeys", JSON.stringify(keys));
+
+  fetch("/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(keys),
+  })
+    .then(() => {
+      updateStatus("API Keys saved ✓", "success");
+    })
+    .catch(() => {
+      updateStatus("Failed to send API keys", "error");
+    });
+}
+
+// Load keys from localStorage into inputs
+function loadApiKeys() {
+  const saved = localStorage.getItem("apiKeys");
+  if (saved) {
+    const { murfKey, assemblyKey, geminiKey } = JSON.parse(saved);
+    document.getElementById("murfKey").value = murfKey || "";
+    document.getElementById("assemblyKey").value = assemblyKey || "";
+    document.getElementById("geminiKey").value = geminiKey || "";
+  }
+}
+
+// Run on page load
+window.addEventListener("DOMContentLoaded", loadApiKeys);
 
 // Initialize status
 updateStatus("Ready to listen...");
-
-// Debug logging
-if (
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
-) {
-  console.log("AI Voice Chat Agent (Strict Mode) loaded");
-  console.log("Controls: Space = Toggle Recording, Escape = End Conversation");
-}

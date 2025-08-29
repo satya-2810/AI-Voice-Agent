@@ -9,10 +9,23 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# HTTP client for API calls
+# HTTP clients for API calls
 httpx==0.25.2
+aiohttp==3.9.1
+requests==2.31.0
+
+# File handling
 aiofiles==23.2.1
 
-# Audio processing
+# Audio processing (legacy - kept for compatibility)
 python-speech-recognition==3.10.0
 pydub==0.25.1
+
+# AI/ML APIs
+assemblyai==0.28.4
+
+# WebSocket support
+websockets==12.0
+
+# Web search
+tavily-python==0.3.0

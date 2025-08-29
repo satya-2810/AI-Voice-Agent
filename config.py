@@ -61,13 +61,11 @@ class Settings:
         self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
         self.llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "1024"))
         
-        # Create required directories
         self._create_directories()
         
         # Setup logging
         self._setup_logging()
         
-        # Validate configuration
         self._validate_config()
     
     def _create_directories(self):
