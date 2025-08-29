@@ -1,7 +1,6 @@
 from typing import Dict, List
 import logging
 
-# Setup logger
 logger = logging.getLogger(__name__)
 
 class ChatMessage:

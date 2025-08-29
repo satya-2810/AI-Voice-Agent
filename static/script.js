@@ -12,14 +12,14 @@ let processor = null;
 
 let ttsChunks = [];
 
-// --- Enhanced Audio Buffering System for Seamless Playback ---
+// Audio Buffering for Seamless Playback
 let playbackContext;
 let playheadTime = 0;
 let audioQueue = [];
 let audioBuffer = [];
 let isPlayingAudio = false;
 let nextStartTime = 0;
-let bufferThreshold = 3; // Number of chunks to buffer before starting
+let bufferThreshold = 3;
 let isBuffering = true;
 let currentlyPlaying = [];
 
@@ -27,7 +27,6 @@ function base64ToPCMFloat32(base64) {
   const binary = atob(base64);
   let offset = 0;
 
-  // Detect and skip WAV header if present
   if (binary.length > 44 && binary.slice(0, 4) === "RIFF") {
     offset = 44;
   }
@@ -69,15 +68,12 @@ function addToAudioBuffer(base64Audio) {
   const float32Array = base64ToPCMFloat32(base64Audio);
   if (!float32Array || float32Array.length === 0) return;
 
-  // Add to buffer
   audioBuffer.push(float32Array);
 
-  // Start playing if we have enough buffered or if already playing
   if (audioBuffer.length >= bufferThreshold && isBuffering) {
     isBuffering = false;
     startBufferedPlayback();
   } else if (!isBuffering && !isPlayingAudio) {
-    // Continue playing if not currently playing
     startBufferedPlayback();
   }
 }
@@ -87,13 +83,11 @@ function startBufferedPlayback() {
 
   isPlayingAudio = true;
 
-  // Play all buffered chunks seamlessly
   while (audioBuffer.length > 0) {
     const float32Array = audioBuffer.shift();
     playAudioChunkBuffered(float32Array);
   }
 
-  // Schedule check for more audio
   setTimeout(checkForMoreAudio, 50);
 }
 
@@ -109,15 +103,13 @@ function playAudioChunkBuffered(float32Array) {
 
   const now = playbackContext.currentTime;
 
-  // Improved scheduling with minimal gaps
   if (nextStartTime <= now) {
-    nextStartTime = now + 0.01; // Very small buffer for responsiveness
+    nextStartTime = now + 0.01;
   }
 
   source.start(nextStartTime);
   nextStartTime += buffer.duration;
 
-  // Track currently playing sources
   currentlyPlaying.push({
     source: source,
     endTime: nextStartTime,
@@ -125,7 +117,6 @@ function playAudioChunkBuffered(float32Array) {
 
   source.onended = () => {
     source.disconnect();
-    // Remove from tracking
     currentlyPlaying = currentlyPlaying.filter(
       (item) => item.source !== source
     );
@@ -136,14 +127,12 @@ function checkForMoreAudio() {
   if (audioBuffer.length > 0) {
     startBufferedPlayback();
   } else {
-    // Check if any audio is still playing
     const now = playbackContext ? playbackContext.currentTime : 0;
     const stillPlaying = currentlyPlaying.some((item) => item.endTime > now);
 
     if (!stillPlaying) {
       isPlayingAudio = false;
     } else {
-      // Keep checking
       setTimeout(checkForMoreAudio, 50);
     }
   }
@@ -154,7 +143,7 @@ function playAudioChunk(base64Audio) {
   addToAudioBuffer(base64Audio);
 }
 
-// --- Helpers ---
+// Helpers
 function updateButtonText(button, icon, text) {
   const iconSpan = button.querySelector(".btn-icon");
   const textSpan = button.querySelector(".btn-text");
@@ -207,7 +196,7 @@ function resetRecordingState() {
   isRecording = false;
 }
 
-// --- Display only FINAL transcriptions ---
+// Display final transcription
 function displayTranscription(transcript) {
   if (transcriptionDisplay) {
     const finalTranscript = document.createElement("div");
@@ -239,9 +228,7 @@ function resetAudioPlayback() {
       try {
         item.source.stop();
         item.source.disconnect();
-      } catch (e) {
-        // Ignore errors from already stopped sources
-      }
+      } catch (e) {}
     }
   });
   currentlyPlaying = [];
@@ -260,9 +247,8 @@ async function beginRecording() {
       console.log("✅ WebSocket connected");
       updateStatus("Recording... Speak now", "recording");
 
-      // reset TTS chunk buffer per session/turn
       ttsChunks = [];
-      resetAudioPlayback(); // Reset audio state for new turn
+      resetAudioPlayback();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -312,16 +298,14 @@ async function beginRecording() {
           displayTranscription(message.transcript);
           updateStatus("Turn completed ✓", "success");
         } else if (message.type === "llm_chunk") {
-          // Optional: log token flow
-          // console.log("LLM chunk:", message.content);
+          console.log("LLM chunk:", message.content);
         } else if (message.type === "tts_audio_chunk") {
-          // Ensure audio context is ready before playing
           if (playbackContext && playbackContext.state === "suspended") {
             playbackContext.resume().then(() => {
               playAudioChunk(message.audio_base64);
             });
           } else {
-            playAudioChunk(message.audio_base64); // 🔊 play with buffering
+            playAudioChunk(message.audio_base64);
           }
           console.log("🎧 Buffering TTS audio chunk");
         } else if (message.type === "tts_done") {
@@ -329,7 +313,6 @@ async function beginRecording() {
             "✅ Client ACK: TTS stream complete. Total chunks =",
             ttsChunks.length
           );
-          // Flush remaining buffer
           isBuffering = false;
           if (audioBuffer.length > 0 && !isPlayingAudio) {
             startBufferedPlayback();
@@ -337,7 +320,6 @@ async function beginRecording() {
         } else if (message.type === "turn_end") {
           updateStatus("Turn ended - ready for next turn", "default");
 
-          // 🔁 Restart recording automatically for next turn
           if (!isRecording) {
             setTimeout(() => {
               beginRecording();
@@ -399,13 +381,14 @@ stopBtn.addEventListener("click", () => {
   if (transcriptionDisplay) transcriptionDisplay.innerHTML = "";
 });
 
-// --- API Key Config Management ---
+// API Key Config
 function saveApiKeys() {
   const murfKey = document.getElementById("murfKey").value.trim();
   const assemblyKey = document.getElementById("assemblyKey").value.trim();
   const geminiKey = document.getElementById("geminiKey").value.trim();
+  const tavilyKey = document.getElementById("tavilyKey").value.trim();
 
-  const keys = { murfKey, assemblyKey, geminiKey };
+  const keys = { murfKey, assemblyKey, geminiKey, tavilyKey };
   localStorage.setItem("apiKeys", JSON.stringify(keys));
 
   fetch("/config", {
@@ -421,19 +404,17 @@ function saveApiKeys() {
     });
 }
 
-// Load keys from localStorage into inputs
 function loadApiKeys() {
   const saved = localStorage.getItem("apiKeys");
   if (saved) {
-    const { murfKey, assemblyKey, geminiKey } = JSON.parse(saved);
+    const { murfKey, assemblyKey, geminiKey, tavilyKey } = JSON.parse(saved);
     document.getElementById("murfKey").value = murfKey || "";
     document.getElementById("assemblyKey").value = assemblyKey || "";
     document.getElementById("geminiKey").value = geminiKey || "";
+    document.getElementById("tavilyKey").value = tavilyKey || "";
   }
 }
 
-// Run on page load
 window.addEventListener("DOMContentLoaded", loadApiKeys);
 
-// Initialize status
 updateStatus("Ready to listen...");

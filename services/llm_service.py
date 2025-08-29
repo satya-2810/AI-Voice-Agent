@@ -8,7 +8,7 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+TAVILY_API_KEY = None
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +31,15 @@ class LLMService:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.request_timeout = 60
         
-    async def search_web(self, query: str) -> str:
+    async def search_web(self, query: str, tavily_key: str = None) -> str:
         """Search the web using Tavily API and return the top answer."""
+        key_to_use = tavily_key or os.getenv("TAVILY_API_KEY")
+        if not key_to_use:
+            return "I cannot fetch live information because no Tavily API key is provided."
         try:
             url = "https://api.tavily.com/search"
             headers = {"Content-Type": "application/json"}
-            payload = {"query": query, "api_key": TAVILY_API_KEY, "max_results": 1}
+            payload = {"query": query, "api_key": key_to_use, "max_results": 1}
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as resp:
@@ -96,12 +99,12 @@ You approach every task with meticulous attention to detail and quiet dignity. Y
         keywords = ["score", "match", "fixture", "latest", "weather", "stock", "price", "results"]
         return any(kw in user_text.lower() for kw in keywords)
 
-    async def generate_chat_response(self, messages: List[Dict]) -> str:
+    async def generate_chat_response(self, messages: List[Dict], tavily_key: str = None) -> str:
         """Non-streaming chat response with pre-search for live info."""
         try:
             last_msg = messages[-1]["content"]
             if self.is_live_info_query(last_msg):
-                web_answer = await self.search_web(last_msg)
+                web_answer = await self.search_web(last_msg, tavily_key=tavily_key)
                 logger.info(f"Web search result: {web_answer[:100]}...")
                 prompt = f"Web search result: {web_answer}\nAnswer this question courteously as Lady Victoria:"
                 response = self.generate_response(prompt)
@@ -222,22 +225,17 @@ You are continuing a conversation. Maintain your character as Lady Victoria thro
             logger.error(f"DEBUG: Exception occurred: {e}")
             return f"EXCEPTION: {str(e)}"
 
-    async def stream_chat_response(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
+    async def stream_chat_response(self, messages: List[Dict], tavily_key: str = None) -> AsyncGenerator[str, None]:
         """Stream response for a conversation, including pre-search for live info and preserving memory."""
         last_msg = messages[-1]["content"] if messages else ""
         
-        # Prepare conversation context (memory)
         conversation_prompt = self.format_conversation_prompt(messages[:-1])  # exclude last message for prompt
         
         if self.is_live_info_query(last_msg):
-            # Fetch web search result
-            web_answer = await self.search_web(last_msg)
+            web_answer = await self.search_web(last_msg, tavily_key=tavily_key)
             logger.info(f"Web search result: {web_answer[:100]}...")
             
-            # Combine memory + search result + user query
             prompt = f"{conversation_prompt}\nWeb search result: {web_answer}\nUser asked: {last_msg}\nPlease answer courteously as Lady Victoria:"
-            
-            # Stream from Gemini using the combined prompt
             url = f"{self.base_url}/models/gemini-2.5-flash:streamGenerateContent?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
@@ -277,4 +275,3 @@ You are continuing a conversation. Maintain your character as Lady Victoria thro
         else:
             async for chunk in self.stream_response(messages):
                 yield chunk
-

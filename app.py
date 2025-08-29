@@ -29,7 +29,8 @@ from services.tts_service import TTSService
 user_api_keys = {
     "murf": None,
     "assembly": None,
-    "gemini": None
+    "gemini": None,
+    "tavily": None
 }
 
 logging.basicConfig(level=logging.INFO)
@@ -119,8 +120,9 @@ async def update_config(request: Request):
     user_api_keys["murf"] = data.get("murfKey") or settings.murf_api_key
     user_api_keys["assembly"] = data.get("assemblyKey") or settings.assemblyai_api_key
     user_api_keys["gemini"] = data.get("geminiKey") or settings.gemini_api_key
+    user_api_keys["tavily"] = data.get("tavilyKey")
     logger.info(f"🔑 Updated API keys (murf={bool(user_api_keys['murf'])}, "
-                f"assembly={bool(user_api_keys['assembly'])}, gemini={bool(user_api_keys['gemini'])})")
+                f"assembly={bool(user_api_keys['assembly'])}, gemini={bool(user_api_keys['gemini'])}, " f"tavily={bool(user_api_keys['tavily'])})")
     return {"status": "ok", "keys": {k: bool(v) for k, v in user_api_keys.items()}}
 
 
