@@ -26,6 +26,3 @@ assemblyai==0.28.1
 
 # WebSocket support
 websockets==12.0
-
-# Web search
-tavily-python==0.3.0
