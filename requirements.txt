@@ -1,22 +1,10 @@
 --prefer-binary
 
-# Core framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 jinja2==3.1.2
-aiofiles==23.2.1
-python-multipart==0.0.6
 
-# Configuration & validation
-pydantic==2.8.0
-python-dotenv==1.0.0
-
-# HTTP clients
-requests==2.31.0
 aiohttp==3.9.1
 
-# AI / STT / LLM APIs
 assemblyai==0.28.1
-tavily-python==0.3.0
-
 websockets==12.0

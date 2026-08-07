@@ -2,16 +2,10 @@ import asyncio
 import base64
 import logging
 import time
-from typing import Optional, Dict, Any, AsyncGenerator
+from typing import Optional, AsyncGenerator
 import json
-import os
-from dotenv import load_dotenv
 import websockets
 from collections import deque
-
-load_dotenv()
-
-MURF_API_KEY = os.getenv("MURF_API_KEY")
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +16,11 @@ class TTSService:
     def __init__(self, api_key: str, base_url: str = None):
         self.api_key = api_key
         self.base_url = base_url or "https://api.murf.ai/v1"
-        self.render_url = f"{self.base_url}/speech/generate"
-        self.voices_url = f"{self.base_url}/speech/voices"
         self.default_voice_id = "en-US-amara"
-        self.timeout = 30
 
-        # Audio buffering settings
         self.audio_buffer = deque()
-        self.buffer_size = 5  # Number of chunks to buffer
-        self.chunk_delay = 0.1  # Delay between chunk sends
-
+        self.buffer_size = 5
+        self.chunk_delay = 0.05
         logger.info(f"TTS Service initialized with base URL: {self.base_url}")
 
     @property
@@ -80,8 +69,8 @@ class TTSService:
             final_payload = {"text": "", "end": True}
             await ws.send(json.dumps(final_payload))
             logger.info("📤 Sent Murf close payload (end=True)")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(e)
 
     async def recv_audio_buffered(self, ws) -> AsyncGenerator[str, None]:
         """
@@ -96,7 +85,6 @@ class TTSService:
             async for message in ws:
                 try:
                     data = json.loads(message)
-                    logger.debug(f"Murf WS received: {data}")
                 except Exception:
                     logger.warning("Murf WS: non-JSON message ignored")
                     continue
@@ -129,7 +117,7 @@ class TTSService:
                         if (
                             len(self.audio_buffer) >= self.buffer_size
                             or time_since_start > 0.5
-                        ):  # Max 500ms initial buffering
+                        ):
 
                             while self.audio_buffer:
                                 buffered_chunk = self.audio_buffer.popleft()
@@ -161,10 +149,3 @@ class TTSService:
                     await ws.close()
             except Exception:
                 pass
-
-    async def recv_audio(self, ws) -> AsyncGenerator[str, None]:
-        """
-        Legacy method - now uses buffered approach for compatibility
-        """
-        async for chunk in self.recv_audio_buffered(ws):
-            yield chunk

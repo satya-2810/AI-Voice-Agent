@@ -1,20 +1,18 @@
 from dataclasses import dataclass, field
 from asyncio import Queue
-from typing import List
-import asyncio
 
 
 @dataclass
 class ClientSession:
     session_id: str
     llm_triggered: bool = False
-    conversation_history: List[dict] = field(default_factory=list)
     event_queue: Queue = field(default_factory=Queue)
+    tavily_key: str | None = None
 
 
 class SessionManager:
     def __init__(self):
-        self.sessions = {}
+        self.sessions: dict[str, ClientSession] = {}
 
     def create(self, session_id: str):
         session = ClientSession(session_id)

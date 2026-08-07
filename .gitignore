@@ -1,26 +1,42 @@
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
-*.pyc
 
+# Virtual environments
 .venv/
 venv/
-.env
-app.log
-uploads/*
-!uploads/.gitkeep
 
-temp/*
-!temp/.gitkeep
-
-Agent/Output
-
+# IDE
 .vscode/
 .idea/
 
+# OS
 .DS_Store
 Thumbs.db
 
+# Logs
 *.log
+
+# Audio generated during runtime
 *.raw
 *.mp3
+
+# Environment files
+.env
+.env.*
+
+# Build / cache
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Runtime output
+Agent/Output/
+
+# Temporary folders
+temp/
+
+# Uploaded files (if ever recreated)
+uploads/

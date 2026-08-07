@@ -2,6 +2,7 @@ services:
   - type: web
     name: ai-voice-agent
     runtime: python
+    plan: free
 
     buildCommand: pip install -r requirements.txt
 
