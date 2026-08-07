@@ -1,6 +1,10 @@
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from contextlib import asynccontextmanager
+from managers.connection_manager import manager
+from managers.session_manager import session_manager
+from pipelines.voice_pipeline import VoicePipeline
 import logging
 import os
 import uuid
@@ -23,31 +27,26 @@ from config import settings
 from services.chat_service import ChatService
 from services.stt_service import STTService
 from services.llm_service import LLMService
-from services.tts_service import TTSService 
+from services.tts_service import TTSService
 
 # Store runtime API keys provided by user
-user_api_keys = {
-    "murf": None,
-    "assembly": None,
-    "gemini": None,
-    "tavily": None
-}
+user_api_keys = {"murf": None, "assembly": None, "gemini": None, "tavily": None}
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 aai.settings.api_key = settings.assemblyai_api_key
 
+
 app = FastAPI(
     title="Lady Victoria - AI Voice Chat Agent",
     version="1.0.0",
-    description="AI-powered voice chat application with STT, LLM, and TTS capabilities"
+    description="AI-powered voice chat application with STT, LLM, and TTS capabilities",
 )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app,host = "0.0.0.0", port = port)
-main_loop = asyncio.get_running_loop()
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
@@ -55,16 +54,18 @@ templates = Jinja2Templates(directory=settings.templates_dir)
 
 chat_service = ChatService()
 stt_service = STTService(
-    api_key=settings.assemblyai_api_key,
-    base_url=settings.assemblyai_base_url
+    api_key=settings.assemblyai_api_key, base_url=settings.assemblyai_base_url
 )
 llm_service = LLMService(
-    api_key=settings.gemini_api_key,
-    base_url=settings.gemini_base_url
+    api_key=settings.gemini_api_key, base_url=settings.gemini_base_url
 )
-tts_service = TTSService(
-    api_key=settings.murf_api_key,
-    base_url=settings.murf_base_url
+tts_service = TTSService(api_key=settings.murf_api_key, base_url=settings.murf_base_url)
+
+voice_pipeline = VoicePipeline(
+    chat_service,
+    llm_service,
+    tts_service,
+    manager,
 )
 
 OUTPUT_DIR = os.path.join("Agent", "Output")
@@ -86,34 +87,27 @@ async def health_check():
         "service": "AI Voice Chat Agent",
         "version": "1.0.0",
         "api_keys": api_status,
-        "session_count": chat_service.get_session_count()
+        "session_count": chat_service.get_session_count(),
     }
 
 
 @app.get("/debug/llm")
 async def debug_llm():
-    """Debug endpoint to test LLM service and see raw response"""
     try:
-        logger.info("Testing non-streaming LLM...")
-        non_streaming_result = llm_service.generate_response("Hello, how are you?")
-
-        logger.info("Testing streaming LLM debug...")
-        streaming_debug = await llm_service.debug_stream_response("Hello, how are you?")
+        result = await llm_service.generate_response_async(
+            "Introduce yourself in one sentence."
+        )
 
         return {
-            "status": "debug_complete",
-            "non_streaming_result": non_streaming_result,
-            "streaming_debug": streaming_debug,
-            "api_key_present": bool(settings.gemini_api_key),
-            "base_url": settings.gemini_base_url
+            "status": "success",
+            "response": result,
         }
+
     except Exception as e:
-        logger.error(f"Debug LLM error: {e}")
+        logger.exception(e)
         return {
-            "status": "debug_failed",
+            "status": "failed",
             "error": str(e),
-            "api_key_present": bool(settings.gemini_api_key),
-            "base_url": settings.gemini_base_url
         }
 
 
@@ -125,236 +119,117 @@ async def update_config(request: Request):
     user_api_keys["assembly"] = data.get("assemblyKey") or settings.assemblyai_api_key
     user_api_keys["gemini"] = data.get("geminiKey") or settings.gemini_api_key
     user_api_keys["tavily"] = data.get("tavilyKey")
-    logger.info(f"🔑 Updated API keys (murf={bool(user_api_keys['murf'])}, "
-                f"assembly={bool(user_api_keys['assembly'])}, gemini={bool(user_api_keys['gemini'])}, " f"tavily={bool(user_api_keys['tavily'])})")
+    logger.info(
+        f"🔑 Updated API keys (murf={bool(user_api_keys['murf'])}, "
+        f"assembly={bool(user_api_keys['assembly'])}, gemini={bool(user_api_keys['gemini'])}, "
+        f"tavily={bool(user_api_keys['tavily'])})"
+    )
     return {"status": "ok", "keys": {k: bool(v) for k, v in user_api_keys.items()}}
 
 
 # Global WebSocket reference for turn detection
-current_websocket = None
 current_session_id = None
-llm_triggered = False  
+
 
 # AssemblyAI streaming event handlers
 def on_begin(client: Type[StreamingClient], event: BeginEvent):
     logger.info(f"🎤 AssemblyAI Session started: {event.id}")
 
 
-def on_turn(client: Type[StreamingClient], event: TurnEvent):
-    global current_websocket, llm_triggered
-
-    if event.transcript:
-        loop = main_loop
-
-        if not event.end_of_turn:
-            llm_triggered = False
-            logger.info(f"⚡ PARTIAL TRANSCRIPTION: {event.transcript}")
-
-            if current_websocket:
-                asyncio.run_coroutine_threadsafe(
-                    current_websocket.send_text(
-                        json.dumps({
-                            "type": "partial_transcription",
-                            "transcript": event.transcript,
-                            "end_of_turn": False
-                        })
-                    ),
-                    main_loop
-                )
-            return
-
-        # Handle final transcript
-        if event.end_of_turn:
-            if llm_triggered:
-                return
-
-            if not any(char in event.transcript for char in '.!?,:;'):
-                logger.info(f"⏭️ Skipping non-punctuated transcript: {event.transcript}")
-                return
-
-            llm_triggered = True
-            logger.info(f"🎯 FINAL TRANSCRIPTION: {event.transcript}")
-
-            if current_websocket:
-                asyncio.run_coroutine_threadsafe(
-                    current_websocket.send_text(
-                        json.dumps({
-                            "type": "final_transcription",
-                            "transcript": event.transcript,
-                            "end_of_turn": True
-                        })
-                    ),
-                    main_loop
-                )
-
-            try:
-                chat_service.add_message(current_session_id, "user", event.transcript)
-            except Exception as _e:
-                logger.warning(f"Could not save user message: {_e}")
-
-            # Use user-provided API keys 
-            llm_service.api_key = user_api_keys["gemini"] or settings.gemini_api_key
-            tts_service.api_key = user_api_keys["murf"] or settings.murf_api_key
-
-            async def stream_llm_and_tts(transcript: str):
-                murf_ws = None
-                audio_receiver_task = None
-                audio_chunks = []
-                audio_send_queue = asyncio.Queue()
-
-                try:
-                    print(f"🔍 Testing LLM with prompt: '{transcript}'")
-
-                    try:
-                        _ = llm_service.generate_response("ping")
-                        print("✅ LLM non-streaming ping OK")
-                    except Exception as test_err:
-                        print(f"❌ LLM non-streaming ping failed: {test_err}")
-                        if current_websocket:
-                            await current_websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"LLM service unavailable: {str(test_err)}"
-                            }))
-                        return
-
-                    try:
-                        murf_ws = await tts_service.open_murf_ws(
-                            voice_id=None,
-                            context_id="static_context_123"
-                        )
-                        print("✅ Murf WebSocket connected")
-                    except Exception as murf_err:
-                        print(f"❌ Murf WebSocket connection failed: {murf_err}")
-                        if current_websocket:
-                            await current_websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"TTS service connection failed: {str(murf_err)}"
-                            }))
-                        return
-
-                    async def pump_murf_audio_buffered():
-                        chunk_index = 0
-                        try:
-                            async for audio_b64 in tts_service.recv_audio_buffered(murf_ws):
-                                audio_chunks.append(audio_b64)
-                                chunk_index += 1
-                                await audio_send_queue.put({
-                                    "type": "tts_audio_chunk",
-                                    "audio_base64": audio_b64,
-                                    "chunk_index": chunk_index
-                                })
-                        finally:
-                            await audio_send_queue.put({"type": "tts_done"})
-
-                    async def send_audio_to_client():
-                        try:
-                            while True:
-                                audio_message = await audio_send_queue.get()
-                                if audio_message["type"] == "tts_done":
-                                    if current_websocket:
-                                        await current_websocket.send_text(json.dumps({
-                                            "type": "tts_done"
-                                        }))
-                                    break
-                                if current_websocket:
-                                    await current_websocket.send_text(json.dumps(audio_message))
-                                await asyncio.sleep(0.05)
-                        except Exception as send_err:
-                            print(f"❌ Audio sender error: {send_err}")
-
-                    audio_receiver_task = asyncio.create_task(pump_murf_audio_buffered())
-                    audio_sender_task = asyncio.create_task(send_audio_to_client())
-
-                    messages = chat_service.get_recent_messages(current_session_id, limit=10)
-                    full_response = ""
-                    text_buffer = ""
-                    chunk_count = 0
-
-                    try:
-                        async for chunk in llm_service.stream_chat_response(messages):
-                            chunk_count += 1
-                            full_response += chunk
-                            text_buffer += chunk
-
-                            if current_websocket:
-                                await current_websocket.send_text(json.dumps({
-                                    "type": "llm_chunk",
-                                    "content": chunk
-                                }))
-
-                            if (len(text_buffer) > 50 or
-                                any(punct in chunk for punct in '.!?') or
-                                chunk_count % 10 == 0):
-                                await tts_service.send_text_event(murf_ws, text_buffer.strip())
-                                text_buffer = ""
-
-                        if text_buffer.strip():
-                            await tts_service.send_text_event(murf_ws, text_buffer.strip())
-
-                        if current_websocket:
-                            await current_websocket.send_text(json.dumps({
-                                "type": "llm_final_response",
-                                "content": full_response
-                            }))
-
-                        chat_service.add_message(current_session_id, "assistant", full_response)
-                        await tts_service.close_murf_ws(murf_ws)
-
-                        if audio_receiver_task:
-                            await audio_receiver_task
-                        if audio_sender_task:
-                            await audio_sender_task
-
-                    except Exception as llm_stream_err:
-                        logger.error(f"❌ LLM streaming error: {llm_stream_err}")
-                        if current_websocket:
-                            await current_websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"LLM streaming failed: {str(llm_stream_err)}"
-                            }))
-                        return
-
-                finally:
-                    if murf_ws:
-                        try:
-                            await murf_ws.close()
-                        except Exception:
-                            pass
-                    if audio_receiver_task and not audio_receiver_task.done():
-                        audio_receiver_task.cancel()
-                    if 'audio_sender_task' in locals() and not audio_sender_task.done():
-                        audio_sender_task.cancel()
-
-            asyncio.run_coroutine_threadsafe(stream_llm_and_tts(event.transcript), main_loop)
-
-            if current_websocket:
-                asyncio.run_coroutine_threadsafe(
-                    current_websocket.send_text(
-                        json.dumps({
-                            "type": "turn_end",
-                            "message": "Turn ended - ready for next turn"
-                        })
-                    ),
-                    main_loop
-                )
-
-
 def on_terminated(client: Type[StreamingClient], event: TerminationEvent):
-    logger.info(f"🔌 AssemblyAI Session terminated: {event.audio_duration_seconds} seconds processed")
+    logger.info(
+        f"🔌 AssemblyAI Session terminated: {event.audio_duration_seconds} seconds processed"
+    )
 
 
 def on_error(client: Type[StreamingClient], error: StreamingError):
     logger.error(f"❌ AssemblyAI error: {error}")
 
 
+async def process_session_events(session, websocket):
+    while True:
+        event = await session.event_queue.get()
+
+        if event["type"] == "partial":
+            logger.info("QUEUE -> partial")
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "partial_transcription",
+                        "transcript": event["transcript"],
+                        "end_of_turn": False,
+                    }
+                )
+            )
+
+        elif event["type"] == "final":
+            logger.info("QUEUE -> final")
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "final_transcription",
+                        "transcript": event["transcript"],
+                        "end_of_turn": True,
+                    }
+                )
+            )
+
+            await voice_pipeline.stream_llm_and_tts(
+                session,
+                event["transcript"],
+                websocket,
+            )
+
+
+def create_turn_handler(session):
+    def handler(client, event):
+        logger.info(
+            f"TURN EVENT: transcript={event.transcript!r}, end_of_turn={event.end_of_turn}"
+        )
+        if event.transcript:
+
+            if not event.end_of_turn:
+                session.llm_triggered = False
+                session.event_queue.put_nowait(
+                    {
+                        "type": "partial",
+                        "transcript": event.transcript,
+                    }
+                )
+                return
+
+            if session.llm_triggered:
+                return
+
+            if not any(c in event.transcript for c in ".!?,:;"):
+                return
+
+            session.llm_triggered = True
+
+            session.event_queue.put_nowait(
+                {
+                    "type": "final",
+                    "transcript": event.transcript,
+                }
+            )
+
+    return handler
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    global current_websocket, current_session_id
+    global current_session_id
 
-    await websocket.accept()
-    current_websocket = websocket
     current_session_id = uuid.uuid4().hex
-    logger.info(f"🎤 Client connected to /ws (session={current_session_id})")
+    current_session = session_manager.create(current_session_id)
+    await manager.connect(current_session_id, websocket)
+
+    event_processor = asyncio.create_task(
+        process_session_events(
+            current_session,
+            websocket,
+        )
+    )
 
     file_path = os.path.join(OUTPUT_DIR, "recorded_audio.raw")
     if os.path.exists(file_path):
@@ -373,7 +248,7 @@ async def websocket_endpoint(websocket: WebSocket):
     )
 
     streaming_client.on(StreamingEvents.Begin, on_begin)
-    streaming_client.on(StreamingEvents.Turn, on_turn)
+    streaming_client.on(StreamingEvents.Turn, create_turn_handler(current_session))
     streaming_client.on(StreamingEvents.Termination, on_terminated)
     streaming_client.on(StreamingEvents.Error, on_error)
 
@@ -401,7 +276,15 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"⚠️ WebSocket error: {e}")
     finally:
-        current_websocket = None
+        event_processor.cancel()
+
+        try:
+            await event_processor
+        except asyncio.CancelledError:
+            pass
+
+        manager.disconnect(current_session_id)
+        session_manager.remove(current_session_id)
         current_session_id = None
         logger.info("Cleaned up session")
         try:

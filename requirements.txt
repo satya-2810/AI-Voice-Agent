@@ -18,3 +18,5 @@ aiohttp==3.9.1
 # AI / STT / LLM APIs
 assemblyai==0.28.1
 tavily-python==0.3.0
+
+websockets==12.0

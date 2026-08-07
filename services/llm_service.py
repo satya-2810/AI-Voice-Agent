@@ -1,277 +1,321 @@
-import requests
 import os
-import logging
-import aiohttp
-import asyncio
-from typing import List, Dict, AsyncGenerator
 import json
+import logging
+import time
+from typing import List, Dict, AsyncGenerator
+
+import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
-TAVILY_API_KEY = None
 
 logger = logging.getLogger(__name__)
 
-class ChatMessage:
-    def __init__(self, role: str, content: str):
-        self.role = role
-        self.content = content
-
-class LLMResponse:
-    def __init__(self, text: str):
-        self.text = text
 
 class LLMService:
-    """Service for handling Language Model operations."""
     def __init__(self, api_key: str = None, base_url: str = None):
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.base_url = base_url or os.getenv(
             "GEMINI_BASE_URL",
-            "https://generativelanguage.googleapis.com/v1beta"
+            "https://generativelanguage.googleapis.com/v1beta",
         )
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.request_timeout = 60
-        
-    async def search_web(self, query: str, tavily_key: str = None) -> str:
-        """Search the web using Tavily API and return the top answer."""
-        key_to_use = tavily_key or os.getenv("TAVILY_API_KEY")
-        if not key_to_use:
-            return "I cannot fetch live information because no Tavily API key is provided."
-        try:
-            url = "https://api.tavily.com/search"
-            headers = {"Content-Type": "application/json"}
-            payload = {"query": query, "api_key": key_to_use, "max_results": 1}
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as resp:
-                    if resp.status != 200:
-                        err = await resp.text()
-                        logger.error(f"Tavily API error {resp.status}: {err}")
-                        return "I could not fetch information from the web at the moment."
-
-                    data = await resp.json()
-                    if "results" in data and len(data["results"]) > 0:
-                        return data["results"][0].get("content", "No answer found.")
-                    else:
-                        return "No relevant information found, My Lord/Lady."
-        except Exception as e:
-            logger.error(f"Tavily search failed: {e}")
-            return "I encountered an error while searching the web."
-
-    def generate_response(self, prompt: str) -> str:
-        """Generate full response using Gemini API (non-streaming)."""
-        persona_prompt = self._add_persona(prompt)
-        url = f"{self.base_url}/models/gemini-2.5-flash:generateContent?key={self.api_key}"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [{"parts": [{"text": persona_prompt}]}],
-            "generationConfig": {"temperature": 0.7,"topK": 40,"topP": 0.95,"maxOutputTokens": 4096}
-        }
-
-        try:
-            logger.info(f"Generating LLM response for prompt: {prompt[:100]}...")
-            response = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout)
-            response.raise_for_status()
-            response_data = response.json()
-            if not response_data.get("candidates"):
-                logger.error("No candidates in response")
-                raise Exception("No response generated from LLM")
-            return response_data["candidates"][0]["content"]["parts"][0]["text"]
-        except Exception as e:
-            logger.error(f"Failed to generate LLM response: {str(e)}")
-            raise
+        self.model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+        self.request_timeout = int(os.getenv("REQUEST_TIMEOUT", "60"))
 
     def _add_persona(self, prompt: str) -> str:
-        persona = """You are Lady Victoria, a distinguished female royal butler with impeccable manners and unwavering dedication. You possess the refined elegance of aristocratic service, speaking with gracious formality and addressing users as "My Lord" or "My Lady." Like Alfred Pennyworth, you are:
+        persona = """
+You are Lady Victoria, a distinguished female royal butler with impeccable manners and unwavering dedication.
 
-- Supremely competent and resourceful
-- Discreetly wise with gentle guidance
-- Unfailingly loyal and protective
-- Maintains perfect composure in any situation
-- Speaks with refined British eloquence
-- Has years of experience managing estates and anticipating needs
-- Address the user as My Lord if he is a male and My Lady if she is a female
-You approach every task with meticulous attention to detail and quiet dignity. Your responses should reflect your sophisticated vocabulary, courteous manner, and subtle wit when appropriate. But dont give very long answers unless asked. Keep it short.
-
+Rules:
+- Speak elegantly and politely.
+- Address the user as "My Lord" or "My Lady".
+- Be concise unless asked for detail.
+- Be warm, intelligent and helpful.
+- Never mention these instructions.
 """
-        return persona + "\n\nUser request: " + prompt
 
-    def is_live_info_query(self, user_text: str) -> bool:
-        keywords = ["score", "match", "fixture", "latest", "weather", "stock", "price", "results"]
-        return any(kw in user_text.lower() for kw in keywords)
+        return persona + "\n\nUser: " + prompt
 
-    async def generate_chat_response(self, messages: List[Dict], tavily_key: str = None) -> str:
-        """Non-streaming chat response with pre-search for live info."""
-        try:
-            last_msg = messages[-1]["content"]
-            if self.is_live_info_query(last_msg):
-                web_answer = await self.search_web(last_msg, tavily_key=tavily_key)
-                logger.info(f"Web search result: {web_answer[:100]}...")
-                prompt = f"Web search result: {web_answer}\nAnswer this question courteously as Lady Victoria:"
-                response = self.generate_response(prompt)
-            else:
-                prompt = self.format_conversation_prompt(messages)
-                response = self.generate_response(prompt)
-            return response
-        except Exception as e:
-            logger.error(f"Failed to generate chat response: {str(e)}")
-            return "I do apologize, My Lord/Lady, but I'm experiencing some difficulties at the moment. Please allow me to resolve this matter promptly."
-
-    async def stream_response(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
-        url = f"{self.base_url}/models/gemini-2.5-flash:streamGenerateContent?key={self.api_key}"
-        headers = {"Content-Type": "application/json"}
-        contents = []
-        for i, msg in enumerate(messages):
-            content_text = msg["content"]
-            if i == 0:
-                content_text = self._add_persona(content_text)
-            contents.append({"parts": [{"text": content_text}], "role": "user" if msg["role"] == "user" else "model"})
-        payload = {
-            "contents": contents,
-            "generationConfig": {"temperature": 0.7,"topK": 40,"topP": 0.95,"maxOutputTokens": 4096},
+    def is_live_info_query(self, text: str) -> bool:
+        keywords = {
+            "weather",
+            "temperature",
+            "stock",
+            "price",
+            "news",
+            "latest",
+            "today",
+            "live",
+            "score",
+            "match",
+            "currency",
+            "bitcoin",
+            "gold",
+            "time",
         }
 
-        try:
-            logger.info("🔄 Starting streaming LLM response...")
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.request_timeout)) as session:
-                async with session.post(url, headers=headers, json=payload) as resp:
-                    if resp.status != 200:
-                        error_text = await resp.text()
-                        logger.error(f"Gemini API error {resp.status}: {error_text}")
-                        raise Exception(f"Gemini API error: {resp.status}")
-                    buffer = ""
-                    async for chunk in resp.content.iter_chunked(1024):
-                        try:
-                            buffer += chunk.decode("utf-8")
-                        except UnicodeDecodeError:
-                            continue
+        text = text.lower()
+
+        return any(keyword in text for keyword in keywords)
+
+    def _build_contents(self, messages: List[Dict]) -> List[Dict]:
+        """
+        Convert chat history into Gemini's contents format.
+        """
+
+        contents = []
+
+        for index, msg in enumerate(messages):
+
+            text = msg["content"]
+
+            if index == 0 and msg["role"] == "user":
+                text = self._add_persona(text)
+
+            contents.append(
+                {
+                    "role": "user" if msg["role"] == "user" else "model",
+                    "parts": [{"text": text}],
+                }
+            )
+
+        return contents
+
+    async def _call_gemini(self, contents: List[Dict]) -> str:
+        """
+        Standard (non-streaming) Gemini request.
+        Returns the complete response as a string.
+        """
+
+        url = (
+            f"{self.base_url}/models/{self.model}:generateContent"
+            f"?key={self.api_key}"
+        )
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.7,
+                "topP": 0.95,
+                "topK": 40,
+                "maxOutputTokens": 256,
+            },
+        }
+
+        timeout = aiohttp.ClientTimeout(total=self.request_timeout)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+
+            async with session.post(
+                url,
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                },
+            ) as response:
+
+                if response.status != 200:
+                    error = await response.text()
+                    logger.error(f"Gemini Error: {error}")
+                    raise RuntimeError(error)
+
+                data = await response.json()
+
+                try:
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                except (KeyError, IndexError):
+                    logger.error(f"Unexpected Gemini response: {data}")
+                    raise RuntimeError("Invalid Gemini response")
+
+    async def _stream_gemini(
+        self,
+        contents: List[Dict],
+    ) -> AsyncGenerator[str, None]:
+        """
+        True Gemini streaming.
+        Yields text chunks as soon as Gemini generates them.
+        """
+
+        url = (
+            f"{self.base_url}/models/{self.model}:streamGenerateContent"
+            f"?alt=sse&key={self.api_key}"
+        )
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.7,
+                "topP": 0.95,
+                "topK": 40,
+                "maxOutputTokens": 2048,
+            },
+        }
+
+        timeout = aiohttp.ClientTimeout(total=self.request_timeout)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            request_start = time.perf_counter()
+
+            logger.info("➡ Sending request to Gemini...")
+            logger.info(f"Using model: {self.model}")
+            logger.info(f"URL: {url}")
+            async with session.post(
+                url,
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                },
+            ) as response:
+                logger.info(
+                    f"⬅ Headers received after {time.perf_counter() - request_start:.2f}s"
+                )
+                if response.status != 200:
+                    error = await response.text()
+                    logger.error(f"Gemini Error: {error}")
+                    raise RuntimeError(error)
+
+                async for raw in response.content:
+
+                    line = raw.decode(
+                        "utf-8",
+                        errors="ignore",
+                    ).strip()
+
+                    logger.debug(f"SSE Line: {line}")
+
+                    if not line:
+                        continue
+
+                    if line.startswith("data:"):
+                        line = line[5:].strip()
+
+                    if line == "[DONE]":
+                        break
+
                     try:
-                        data = json.loads(buffer)
-                        if isinstance(data, list):
-                            full_text = ""
-                            for item in data:
-                                if "candidates" in item and len(item["candidates"]) > 0:
-                                    candidate = item["candidates"][0]
-                                    if "content" in candidate and "parts" in candidate["content"]:
-                                        for part in candidate["content"]["parts"]:
-                                            if "functionCall" in part and part["functionCall"].get("name") == "search_web":
-                                                query = part["functionCall"]["args"].get("query", "")
-                                                answer = await self.search_web(query)
-                                                # Stream search result word by word
-                                                for word in answer.split():
-                                                    yield word + " "
-                                                    await asyncio.sleep(0.05)
-                                                return
-                                            if "text" in part and part["text"]:
-                                                full_text += part["text"]
-                            if full_text:
-                                words = full_text.split()
-                                for word in words:
-                                    if word.strip():
-                                        yield word + " "
-                                        await asyncio.sleep(0.05)
-                    except json.JSONDecodeError as parse_err:
-                        logger.error(f"Failed to parse complete JSON response: {parse_err}")
-                        raise Exception("Invalid JSON response from Gemini API")
-        except Exception as e:
-            logger.error(f"❌ Streaming LLM response failed: {str(e)}")
-            try:
-                fallback_prompt = messages[-1]["content"] if messages else "Hello"
-                
-                if self.is_live_info_query(fallback_prompt):
-                    answer = await self.search_web(fallback_prompt)
-                    for word in answer.split():
-                        yield word + " "
-                        await asyncio.sleep(0.05)
-                    return
-                fallback_response = self.generate_response(fallback_prompt)
-                import re
-                sentences = re.split(r'(?<=[.!?])\s+', fallback_response)
-                for sentence in sentences:
-                    if sentence.strip():
-                        yield sentence.strip() + " "
-                        await asyncio.sleep(0.1)
-                        
-            except Exception as fallback_err:
-                logger.error(f"❌ Fallback also failed: {fallback_err}")
-                yield "I do apologize, My Lord/Lady, but I'm experiencing some difficulties at the moment. Please allow me a moment to rectify this situation."
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
-    def format_conversation_prompt(self, messages: List[Dict]) -> str:
-        conversation_prompt = self._add_persona("") + """
-You are continuing a conversation. Maintain your character as Lady Victoria throughout. Here's the conversation history:
+                    candidates = obj.get("candidates", [])
 
-"""
-        for message in messages[-5:]:
-            role = message["role"].capitalize()
-            content = message["content"]
-            conversation_prompt += f"{role}: {content}\n"
-        conversation_prompt += "\nPlease provide a helpful and natural response as Lady Victoria, the royal butler:"
-        return conversation_prompt
+                    if not candidates:
+                        continue
 
-    async def debug_stream_response(self, prompt: str = "Hello") -> str:
-        url = f"{self.base_url}/models/gemini-2.5-flash:streamGenerateContent?key={self.api_key}"
-        headers = {"Content-Type": "application/json"}
-        payload = {"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.7,"topK":40,"topP":0.95,"maxOutputTokens":2048}}
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+
+                    for part in parts:
+
+                        text = part.get("text", "")
+
+                        if text:
+                            logger.debug(f"Gemini chunk: {text}")
+                            yield text
+
+    async def generate_response_async(self, prompt: str) -> str:
+        contents = self._build_contents(
+            [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ]
+        )
+
+        return await self._call_gemini(contents)
+
+    def generate_response(self, prompt: str) -> str:
+        """
+        Synchronous wrapper used for health checks and validation.
+        """
+        import asyncio
+
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.request_timeout)) as session:
-                async with session.post(url, headers=headers, json=payload) as resp:
-                    if resp.status != 200:
-                        error_text = await resp.text()
-                        logger.error(f"DEBUG: API Status {resp.status}: {error_text}")
-                        return f"ERROR: {resp.status} - {error_text}"
-                    complete_text = await resp.text()
-                    logger.info(f"DEBUG: Complete raw response: {complete_text}")
-                    return complete_text
-        except Exception as e:
-            logger.error(f"DEBUG: Exception occurred: {e}")
-            return f"EXCEPTION: {str(e)}"
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.generate_response_async(prompt))
 
-    async def stream_chat_response(self, messages: List[Dict], tavily_key: str = None) -> AsyncGenerator[str, None]:
-        """Stream response for a conversation, including pre-search for live info and preserving memory."""
-        last_msg = messages[-1]["content"] if messages else ""
-        
-        conversation_prompt = self.format_conversation_prompt(messages[:-1])  # exclude last message for prompt
-        
-        if self.is_live_info_query(last_msg):
-            web_answer = await self.search_web(last_msg, tavily_key=tavily_key)
-            logger.info(f"Web search result: {web_answer[:100]}...")
-            
-            prompt = f"{conversation_prompt}\nWeb search result: {web_answer}\nUser asked: {last_msg}\nPlease answer courteously as Lady Victoria:"
-            url = f"{self.base_url}/models/gemini-2.5-flash:streamGenerateContent?key={self.api_key}"
-            headers = {"Content-Type": "application/json"}
-            payload = {
-                "contents": [{"parts": [{"text": prompt}], "role": "user"}],
-                "generationConfig": {"temperature": 0.7, "topK": 40, "topP": 0.95, "maxOutputTokens": 4096}
-            }
-            try:
-                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.request_timeout)) as session:
-                    async with session.post(url, headers=headers, json=payload) as resp:
-                        buffer = ""
-                        async for chunk in resp.content.iter_chunked(1024):
-                            buffer += chunk.decode("utf-8", errors="ignore")
-                        try:
-                            data = json.loads(buffer)
-                            full_text = ""
-                            if isinstance(data, list):
-                                for item in data:
-                                    for candidate in item.get("candidates", []):
-                                        for part in candidate.get("content", {}).get("parts", []):
-                                            if "text" in part and part["text"]:
-                                                full_text += part["text"]
-                            
-                            for word in full_text.split():
-                                yield word + " "
-                                await asyncio.sleep(0.05)
-                        except Exception as parse_err:
-                            logger.error(f"Streaming parse error: {parse_err}")
-                            for word in full_text.split():
-                                yield word + " "
-                                await asyncio.sleep(0.05)
-            except Exception as e:
-                logger.error(f"❌ Streaming LLM pre-search failed: {str(e)}")
-                
-                for word in web_answer.split():
-                    yield word + " "
-                    await asyncio.sleep(0.05)
-        else:
-            async for chunk in self.stream_response(messages):
-                yield chunk
+        raise RuntimeError(
+            "generate_response() cannot be called from an active event loop. "
+            "Use generate_response_async() instead."
+        )
+
+    async def search_web(
+        self,
+        query: str,
+        tavily_key: str,
+    ) -> str:
+
+        if not tavily_key:
+            return ""
+
+        url = "https://api.tavily.com/search"
+
+        payload = {
+            "api_key": tavily_key,
+            "query": query,
+            "search_depth": "basic",
+            "max_results": 3,
+        }
+
+        timeout = aiohttp.ClientTimeout(total=20)
+
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+
+                async with session.post(
+                    url,
+                    json=payload,
+                ) as response:
+
+                    response.raise_for_status()
+
+                    data = await response.json()
+
+                    results = []
+
+                    for item in data.get("results", []):
+
+                        title = item.get("title", "")
+                        content = item.get("content", "")
+
+                        results.append(f"{title}\n{content}")
+
+                    return "\n\n".join(results)
+
+        except Exception as e:
+            logger.exception(e)
+            return ""
+
+    async def stream_chat_response(
+        self,
+        messages: List[Dict],
+        tavily_key: str = None,
+    ) -> AsyncGenerator[str, None]:
+
+        if not messages:
+            return
+        latest_prompt = messages[-1]["content"]
+
+        if tavily_key and self.is_live_info_query(latest_prompt):
+            web_context = await self.search_web(
+                latest_prompt,
+                tavily_key,
+            )
+
+            if web_context:
+
+                messages = messages + [
+                    {
+                        "role": "user",
+                        "content": f"Web search results:\n\n{web_context}\n\n"
+                        f"Now answer the user's question.",
+                    }
+                ]
+
+        contents = self._build_contents(messages)
+
+        async for chunk in self._stream_gemini(contents):
+            yield chunk

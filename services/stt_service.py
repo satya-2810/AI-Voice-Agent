@@ -110,13 +110,10 @@ class STTService:
     def transcribe_audio(self, audio_file_path: str) -> str:
         """Complete transcription workflow."""
         try:
-            # Upload audio
             audio_url = self.upload_audio(audio_file_path)
             
-            # Start transcription
             transcript_id = self.start_transcription(audio_url)
             
-            # Poll for completion
             stt_response = self.poll_transcription(transcript_id)
             
             return stt_response.transcript
