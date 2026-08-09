@@ -7,7 +7,10 @@ The full pipeline runs over a single WebSocket connection:
 **Your voice → AssemblyAI (Speech-to-Text) → Google Gemini (LLM, streamed) → Murf AI (Text-to-Speech, streamed) → Your speakers**
 
 ![Architecture of the pipeline](assets/architecture_diagram.png "Architecture of the pipeline")
-![Voice agent UI](assets/ui_interface.png "Voice agent UI Interface")
+
+![API key setup screen](assets/setup_screen.png "API key setup screen")
+
+![Voice agent in conversation](assets/session_active.png "Voice agent in conversation")
 
 ---
 
@@ -20,6 +23,7 @@ The full pipeline runs over a single WebSocket connection:
 - 🌐 **Optional live web search** — if a Tavily API key is supplied and the user's message contains a live-info keyword (weather, stock, news, score, price, etc.), the agent pulls fresh search results into the prompt before answering
 - 👑 **Lady Victoria persona** — a royal-butler character baked into the system prompt: elegant, concise, addresses you as "My Lord"/"My Lady"
 - 🎛️ **Runtime API key configuration** — no server-side `.env` needed; you paste your API keys into the web UI and they're held in memory for your session
+- 🖥️ **Multi-page flow** — a dedicated setup page (`/`) for entering keys, and a separate session page (`/session`) with a mic-volume-reactive equalizer, live chat transcript, and mic pause / end conversation controls
 - 📊 **Structured logging** — every stage of the pipeline (STT session, Gemini request timing, Murf connection, WebSocket lifecycle) is logged for debugging
 
 ---
@@ -34,7 +38,7 @@ The full pipeline runs over a single WebSocket connection:
 | Text-to-Speech | Murf AI WebSocket streaming API |
 | Web search (optional) | Tavily API |
 | Frontend | Vanilla JavaScript, Web Audio API, native WebSocket |
-| Templates | Jinja2 |
+| Templates | Jinja2 (two pages: setup + session) |
 | HTTP client | aiohttp |
 | Deployment | Render (`render.yaml` included) |
 
@@ -88,9 +92,11 @@ By default this serves on `http://127.0.0.1:8000`.
 
 ### 5. Open it in your browser and add your keys
 
-- Go to `http://127.0.0.1:8000`
-- In the **API Keys** panel, paste your Gemini, Murf, AssemblyAI (and optionally Tavily) keys, then click **Save Keys** — this calls `POST /config` and stores them in memory for the session
-- Click **Start Recording** and talk — Lady Victoria will transcribe, respond, and speak back
+- Go to `http://127.0.0.1:8000` — this is the **setup page**
+- Paste your Gemini, Murf, AssemblyAI (and optionally Tavily) keys, then click **Save keys** — this calls `POST /config` and stores them in memory for the running server
+- On success you're taken to `/session`, the **live agent page**
+- Click **Start session** and talk — Lady Victoria will transcribe, respond, and speak back
+- Use **Stop mic** to pause listening without ending the conversation, or **End conversation** to finish and clear the chat
 
 > Keys are kept in server memory only for the running process (`user_api_keys` in `app.py`) — they are not written to disk or committed anywhere.
 
@@ -114,10 +120,12 @@ ai-voice-agent/
 ├── pipelines/
 │   └── voice_pipeline.py           # Orchestrates STT transcript → LLM stream → TTS stream
 ├── templates/
-│   └── index.html                  # Main UI page
+│   ├── index.html                  # Setup page: API key form
+│   └── session.html                # Session page: ready / active / ended screens
 ├── static/
-│   ├── script.js                   # Frontend WebSocket + Web Audio API client
-│   └── style.css                   # Glassmorphism dark-theme UI
+│   ├── style.css                   # Shared "quiet luxury concierge" theme for both pages
+│   ├── setup.js                    # Setup page: save keys, redirect to /session
+│   └── session.js                  # Session page: equalizer, chat, WebSocket + audio pipeline
 └── assets/                         # README screenshots/diagrams
 ```
 
@@ -127,17 +135,21 @@ ai-voice-agent/
 
 The app is organized into clear layers:
 
-- **`app.py`** — the FastAPI entrypoint. It owns the HTTP routes and the `/ws` WebSocket handler, which receives raw audio bytes from the browser and feeds them into an AssemblyAI `StreamingClient`.
+- **`app.py`** — the FastAPI entrypoint. It serves the two page routes (`/` and `/session`) and owns the `/ws` WebSocket handler, which receives raw audio bytes from the browser and feeds them into an AssemblyAI `StreamingClient`.
 - **`managers/`** — `ConnectionManager` tracks which WebSocket belongs to which session; `SessionManager` creates a lightweight `ClientSession` (holds an `event_queue`, a `llm_triggered` flag to prevent duplicate LLM calls, and the caller's Tavily key).
 - **`services/`** — one class per external API:
   - `ChatService` keeps a rolling in-memory conversation history per session
   - `LLMService` builds Gemini-formatted message payloads, injects the Lady Victoria persona on the first turn, optionally enriches the prompt with Tavily search results, and streams the response back as text chunks
   - `TTSService` opens a Murf WebSocket, streams text into it as it's generated, and yields back base64-encoded audio chunks through a small internal buffer for smoother playback
 - **`pipelines/voice_pipeline.py`** — the glue: takes a finished transcript, saves it to chat history, streams it through `LLMService`, forwards LLM text chunks to the client for live captioning, batches that same text into Murf for TTS, and streams the resulting audio chunks back to the browser over the WebSocket — all concurrently using `asyncio` tasks and queues.
+- **Frontend pages** — `index.html`/`setup.js` handle key collection only; `session.html`/`session.js` handle the entire live-agent experience (mic capture, volume-reactive equalizer, chat rendering, playback) once keys are confirmed saved.
 
 ### Data flow
 
 ```
+Browser: / (setup) → POST /config → redirect → /session (ready)
+                                                    │ Start session
+                                                    ▼
 Browser mic → PCM audio (WS) → AssemblyAI StreamingClient
                                         │ (turn-detected transcript)
                                         ▼
@@ -160,7 +172,8 @@ Browser mic → PCM audio (WS) → AssemblyAI StreamingClient
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/` | Serves the main web UI |
+| `GET` | `/` | Serves the API key setup page |
+| `GET` | `/session` | Serves the live voice agent page |
 | `GET` | `/health` | Health check — reports which API keys are set and active session count |
 | `GET` | `/debug/llm` | Sends a test prompt to Gemini and returns the raw response (useful for verifying your Gemini key works) |
 | `POST` | `/config` | Accepts `{ geminiKey, murfKey, assemblyKey, tavilyKey }` and stores them in memory for the running server |
@@ -205,7 +218,7 @@ Tavily search is **best-effort and silent**: if no Tavily key was submitted via 
 
 - API keys live in server memory only (`user_api_keys` global dict in `app.py`) — they are **not** persisted, and are shared across all connected clients on a given server process rather than being per-user. This is fine for local/single-user use but is not a multi-tenant-safe design.
 - Chat history (`ChatService`) is also in-memory and is lost on server restart.
-- No authentication on any endpoint — anyone who can reach the server can set the API keys and use the voice agent.
+- No authentication on any endpoint — anyone who can reach the server can set the API keys and use the voice agent, and anyone can navigate directly to `/session`.
 
 ---
 
