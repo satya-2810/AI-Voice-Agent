@@ -2,6 +2,10 @@
 
 A real-time, voice-to-voice conversational AI agent built with FastAPI. Speak into your browser and Lady Victoria — a distinguished royal-butler persona — listens, thinks, and replies back in her own voice, streamed to you as she generates it.
 
+## Live Demo
+
+[Try the AI Voice Agent](https://ai-voice-agent-pc67.onrender.com/)
+
 The full pipeline runs over a single WebSocket connection:
 
 **Your voice → AssemblyAI (Speech-to-Text) → Google Gemini (LLM, streamed) → Murf AI (Text-to-Speech, streamed) → Your speakers**
