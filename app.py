@@ -57,6 +57,12 @@ async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/session")
+async def session_page(request: Request):
+    """Serve the voice agent session page"""
+    return templates.TemplateResponse("session.html", {"request": request})
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""

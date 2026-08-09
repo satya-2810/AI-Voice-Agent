@@ -1,81 +1,45 @@
+// Session page: the live voice agent (ready -> active -> ended).
+
+// ============ Guard: bounce back to setup if keys were never saved ============
+fetch("/health")
+  .then((res) => res.json())
+  .then((data) => {
+    const keys = data.api_keys || {};
+    if (!keys.gemini || !keys.murf || !keys.assemblyai) {
+      window.location.href = "/";
+    }
+  })
+  .catch(() => {
+    // If the health check itself fails, let the user try anyway rather than
+    // trapping them — startSession() will surface a clear error either way.
+  });
+
 // ============ Elements ============
-const screenSetup = document.getElementById("screenSetup");
 const screenReady = document.getElementById("screenReady");
 const screenActive = document.getElementById("screenActive");
 const screenEnded = document.getElementById("screenEnded");
 
-const saveKeysBtn = document.getElementById("saveKeysBtn");
 const editKeysBtn = document.getElementById("editKeysBtn");
 const startSessionBtn = document.getElementById("startSessionBtn");
+const startNewSessionBtn = document.getElementById("startNewSessionBtn");
 const stopMicBtn = document.getElementById("stopMicBtn");
 const stopMicLabel = document.getElementById("stopMicLabel");
 const endConversationBtn = document.getElementById("endConversationBtn");
 const backToSetupBtn = document.getElementById("backToSetupBtn");
 
-const setupNote = document.getElementById("setupNote");
 const statusLine = document.getElementById("statusLine");
 const chatWindow = document.getElementById("chatWindow");
 const equalizerEl = document.getElementById("equalizer");
 
-// ============ Screen switching ============
+// ============ Screen switching (within this page only) ============
 function showScreen(screen) {
-  [screenSetup, screenReady, screenActive, screenEnded].forEach((s) => {
+  [screenReady, screenActive, screenEnded].forEach((s) => {
     s.hidden = s !== screen;
   });
 }
 
-// ============ API key handling ============
-function saveApiKeys() {
-  const geminiKey = document.getElementById("geminiKey").value.trim();
-  const murfKey = document.getElementById("murfKey").value.trim();
-  const assemblyKey = document.getElementById("assemblyKey").value.trim();
-  const tavilyKey = document.getElementById("tavilyKey").value.trim();
-
-  if (!geminiKey || !murfKey || !assemblyKey) {
-    setupNote.textContent = "Gemini, Murf, and AssemblyAI keys are required.";
-    setupNote.className = "form-note error";
-    return;
-  }
-
-  const keys = { geminiKey, murfKey, assemblyKey, tavilyKey };
-  localStorage.setItem("apiKeys", JSON.stringify(keys));
-
-  setupNote.textContent = "Saving…";
-  setupNote.className = "form-note";
-
-  fetch("/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(keys),
-  })
-    .then((res) => {
-      if (!res.ok) throw new Error("Server rejected keys");
-      setupNote.textContent = "";
-      showScreen(screenReady);
-    })
-    .catch(() => {
-      setupNote.textContent = "Could not save keys. Please try again.";
-      setupNote.className = "form-note error";
-    });
-}
-
-function loadApiKeys() {
-  const saved = localStorage.getItem("apiKeys");
-  if (!saved) return;
-  try {
-    const { murfKey, assemblyKey, geminiKey, tavilyKey } = JSON.parse(saved);
-    document.getElementById("murfKey").value = murfKey || "";
-    document.getElementById("assemblyKey").value = assemblyKey || "";
-    document.getElementById("geminiKey").value = geminiKey || "";
-    document.getElementById("tavilyKey").value = tavilyKey || "";
-  } catch (e) {
-    /* ignore malformed storage */
-  }
-}
-
-saveKeysBtn.addEventListener("click", saveApiKeys);
-editKeysBtn.addEventListener("click", () => showScreen(screenSetup));
-backToSetupBtn.addEventListener("click", () => showScreen(screenSetup));
+editKeysBtn.addEventListener("click", () => (window.location.href = "/"));
+backToSetupBtn.addEventListener("click", () => (window.location.href = "/"));
 
 // ============ Chat window ============
 let pendingUserBubble = null;
@@ -483,11 +447,11 @@ function endConversation() {
 }
 
 startSessionBtn.addEventListener("click", startSession);
+startNewSessionBtn.addEventListener("click", startSession);
 stopMicBtn.addEventListener("click", toggleMicPause);
 endConversationBtn.addEventListener("click", endConversation);
 
 // ============ Init ============
 window.addEventListener("DOMContentLoaded", () => {
-  loadApiKeys();
-  showScreen(screenSetup);
+  showScreen(screenReady);
 });

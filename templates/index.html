@@ -15,7 +15,6 @@
   <body>
     <div class="app-container">
       <div class="glass-card">
-        <!-- ===================== SCREEN 1: SETUP (API keys) ===================== -->
         <section class="screen" id="screenSetup">
           <div class="header-section">
             <p class="eyebrow">Lady Victoria</p>
@@ -43,60 +42,9 @@
             <p class="form-note" id="setupNote"></p>
           </div>
         </section>
-
-        <!-- ===================== SCREEN 2: READY ===================== -->
-        <section class="screen" id="screenReady" hidden>
-          <div class="header-section">
-            <p class="eyebrow">Lady Victoria</p>
-            <h1 class="title">At your service</h1>
-            <p class="subtitle">
-              The keys have been received. Whenever you are ready, begin the
-              session and I shall attend to you.
-            </p>
-          </div>
-
-          <div class="idle-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" width="40" height="40">
-              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-
-          <button class="btn primary full" id="startSessionBtn">Start session</button>
-          <button class="btn ghost full" id="editKeysBtn">Edit keys</button>
-        </section>
-
-        <!-- ===================== SCREEN 3: ACTIVE SESSION ===================== -->
-        <section class="screen" id="screenActive" hidden>
-          <div class="header-section compact">
-            <p class="eyebrow">Lady Victoria</p>
-            <p class="status-line" id="statusLine">Listening…</p>
-          </div>
-
-          <div class="equalizer" id="equalizer" aria-hidden="true"></div>
-
-          <div class="chat-window" id="chatWindow"></div>
-
-          <div class="button-group">
-            <button class="btn secondary" id="stopMicBtn">
-              <span id="stopMicLabel">Stop mic</span>
-            </button>
-            <button class="btn danger" id="endConversationBtn">End conversation</button>
-          </div>
-        </section>
-
-        <!-- ===================== SCREEN 4: ENDED ===================== -->
-        <section class="screen" id="screenEnded" hidden>
-          <div class="header-section">
-            <p class="eyebrow">Lady Victoria</p>
-            <h1 class="title">Until next time</h1>
-            <p class="subtitle">The conversation has concluded and the room has been tidied.</p>
-          </div>
-          <button class="btn primary full" id="backToSetupBtn">Back to API keys</button>
-        </section>
       </div>
     </div>
 
-    <script src="/static/script.js?v=2" defer></script>
+    <script src="/static/setup.js?v=1" defer></script>
   </body>
 </html>

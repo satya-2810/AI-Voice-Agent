@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lady Victoria — Session</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css?v=2" />
+  </head>
+  <body>
+    <div class="app-container">
+      <div class="glass-card">
+        <!-- ===================== READY ===================== -->
+        <section class="screen" id="screenReady">
+          <div class="header-section">
+            <p class="eyebrow">Lady Victoria</p>
+            <h1 class="title">At your service</h1>
+            <p class="subtitle">
+              The keys have been received. Whenever you are ready, begin the
+              session and I shall attend to you.
+            </p>
+          </div>
+
+          <div class="idle-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" width="40" height="40">
+              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+
+          <button class="btn primary full" id="startSessionBtn">Start session</button>
+          <button class="btn ghost full" id="editKeysBtn">Edit keys</button>
+        </section>
+
+        <!-- ===================== ACTIVE ===================== -->
+        <section class="screen" id="screenActive" hidden>
+          <div class="header-section compact">
+            <p class="eyebrow">Lady Victoria</p>
+            <p class="status-line" id="statusLine">Listening…</p>
+          </div>
+
+          <div class="equalizer" id="equalizer" aria-hidden="true"></div>
+
+          <div class="chat-window" id="chatWindow"></div>
+
+          <div class="button-group">
+            <button class="btn secondary" id="stopMicBtn">
+              <span id="stopMicLabel">Stop mic</span>
+            </button>
+            <button class="btn danger" id="endConversationBtn">End conversation</button>
+          </div>
+        </section>
+
+        <!-- ===================== ENDED ===================== -->
+        <section class="screen" id="screenEnded" hidden>
+          <div class="header-section">
+            <p class="eyebrow">Lady Victoria</p>
+            <h1 class="title">Until next time</h1>
+            <p class="subtitle">The conversation has concluded and the room has been tidied.</p>
+          </div>
+          <button class="btn primary full" id="startNewSessionBtn">Start new session</button>
+          <button class="btn ghost full" id="backToSetupBtn">Back to API keys</button>
+        </section>
+      </div>
+    </div>
+
+    <script src="/static/session.js?v=2" defer></script>
+  </body>
+</html>

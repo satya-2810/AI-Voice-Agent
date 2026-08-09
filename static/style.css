@@ -53,6 +53,10 @@ body {
   gap: 4px;
 }
 
+.screen[hidden] {
+  display: none;
+}
+
 .header-section {
   margin-bottom: 28px;
 }
